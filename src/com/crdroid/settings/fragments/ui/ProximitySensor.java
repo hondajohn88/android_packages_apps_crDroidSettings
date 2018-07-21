@@ -53,8 +53,9 @@ public class ProximitySensor implements SensorEventListener {
 
     public ProximitySensor(Context context) {
         mContext = context;
-        mSensorManager = (SensorManager) mContext.getSystemService(Context.SENSOR_SERVICE);
-        mSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, false);
+        mSensorManager = (SensorManager)
+                mContext.getSystemService(Context.SENSOR_SERVICE);
+        mSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
         mExecutorService = Executors.newSingleThreadExecutor();
         mVibrator = (Vibrator) mContext.getSystemService(Context.VIBRATOR_SERVICE);
         if (mVibrator == null || !mVibrator.hasVibrator()) {
@@ -72,7 +73,6 @@ public class ProximitySensor implements SensorEventListener {
         if (mSawNear && !isNear) {
             if (shouldPulse(event.timestamp)) {
                 Utils.launchDozePulse(mContext);
-                doHapticFeedback();
             }
         } else {
             mInPocketTime = event.timestamp;
@@ -83,11 +83,14 @@ public class ProximitySensor implements SensorEventListener {
     private boolean shouldPulse(long timestamp) {
         long delta = timestamp - mInPocketTime;
 
-        if (Utils.handwaveGestureEnabled(mContext) && Utils.pocketGestureEnabled(mContext)) {
+        if (Utils.handwaveGestureEnabled(mContext)
+                    && Utils.pocketGestureEnabled(mContext)) {
             return true;
-        } else if (Utils.handwaveGestureEnabled(mContext)) {
-            return delta < HANDWAVE_MAX_DELTA_NS;
-        } else if (Utils.pocketGestureEnabled(mContext)) {
+        } else if (Utils.handwaveGestureEnabled(mContext)
+                    && !Utils.pocketGestureEnabled(mContext)) {
+            return delta < POCKET_MIN_DELTA_NS;
+        } else if (!Utils.handwaveGestureEnabled(mContext)
+                    && Utils.pocketGestureEnabled(mContext)) {
             return delta >= POCKET_MIN_DELTA_NS;
         }
         return false;
@@ -100,17 +103,13 @@ public class ProximitySensor implements SensorEventListener {
 
     protected void enable() {
         if (DEBUG) Log.d(TAG, "Enabling");
-        submit(() -> {
-            mSensorManager.registerListener(this, mSensor,
-                    SensorManager.SENSOR_DELAY_NORMAL);
-        });
+        mSensorManager.registerListener(this, mSensor,
+                SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     protected void disable() {
         if (DEBUG) Log.d(TAG, "Disabling");
-        submit(() -> {
-            mSensorManager.unregisterListener(this, mSensor);
-        });
+        mSensorManager.unregisterListener(this, mSensor);
     }
 
     private void doHapticFeedback() {
